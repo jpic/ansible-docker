@@ -66,6 +66,7 @@
 @[25-34](Exemple d'introspection avec docker inspect)
 @[36-39](Exemple d'injection de dependances)
 @[41-57](Exemple de declaration de container en ansible)
+@[49](Surtout avec persistence des logs !)
 @[59-63](Exemple de wait)
 @[65-67](On genere un UUID pour les healthchecks)
 @[69-71](Et donc une URL qui contient le dit UUID)
