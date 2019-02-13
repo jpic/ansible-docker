@@ -51,6 +51,8 @@
 - deport du build de l'image en CI |
 - afin de tester celle-ci avant le deploiement |
 - de pouvoir la deployer sur differents environnements avant la prod |
+- automatiser les healthchecks post-deploy |
+- afficher les logs automatiquement |
 - automatiser le rollback |
 
 ---
@@ -58,6 +60,20 @@
 ## Ansible et le module docker
 
 ---?code=ansible.yml&lang=yaml&title=Ansible tasks example
+
+@[3-17](Notification slack, le token etant sous chiffrement ansible-vault)
+@[19-22](Exemple d'introspection avec docker-run)
+@[25-34](Exemple d'introspection avec docker inspect)
+@[36-39](Exemple d'injection de dependances)
+@[41-57](Exemple de declaration de container en ansible)
+@[59-63](Exemple de wait)
+@[65-67](On genere un UUID pour les healthchecks)
+@[69-71](Et donc une URL qui contient le dit UUID)
+@[74-81](Un curl sur l'url de healthcheck, avec l'UUID)
+@[83-95](On informe slack si curl est content)
+@[97-110](Autrement on informe slack que curl est triste)
+@[112-124](On affiche les logs de notre proxy avec un grep sur l'UUID)
+@[126-130](Et les logs de notre app)
 
 ---
 
@@ -73,3 +89,9 @@
 ---
 
 ## Ansible peut aussi bien automatiser du compose
+
+- module docker_service
+
+---
+
+## Merci !

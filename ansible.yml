@@ -22,11 +22,21 @@
   register: project_image_uuid_shell
   changed_when: false
 
+- name: Inspect image for env vars
+  shell: sudo /usr/bin/docker inspect {{ project_image }}
+  register: project_image_env
+  tags: update
+
 - name: Get plugins from image variables
   set_fact:
     project_plugins: "{{ project_image_env.get('PLAYLABS_PLUGINS', '').split(',') }}"
   tags: update
   when: project_plugins == [] and 'PLAYLABS_PLUGINS' in project_image_env
+
+- name: Running deploy.pre.yml for plugins
+  with_items: '{{ project_plugins }}'
+  include: plugins/{{ item }}/deploy.pre.yml
+  tags: update,predeploy
 
 - name: Create postgres container
   register: project_postgres_container
@@ -51,3 +61,70 @@
     host: "{{ project_postgres_container['ansible_facts']['docker_container']['NetworkSettings']['IPAddress'] }}"
     port: 5432
     state: started
+
+- name: Set test id
+  set_fact: test_id={{ ansible_date_time|to_uuid }}
+  tags: check,update
+
+- name: Set URL
+  set_fact: url='{{ "https" if project_letsencrypt_email else "http" }}://{{ project_dns }}/?test={{ test_id }}'
+  tags: check,update
+
+- block:
+  - name: Verify URL
+    register: url_verify
+    retries: '{{ timeout|default(60) }}'
+    delay: 1
+    until: url_verify.failed == false
+    tags: check,update
+    changed_when: false
+    shell: curl {% if project_htaccess %}-I {% endif %} {{ "" if project_env.get("ACME_CA_URI", "") == "https://acme-v01.api.letsencrypt.org/directory" else "-k" }} {{ url }}
+
+  - name: Send checks success slack message
+    when: slack_token is defined and project_slack_channel
+    tags: update
+    slack:
+      token: '{{ project_slack_token }}'
+      parse: full
+      username: Playlabs
+      icon_url: '{{ project_slack_icon }}'
+      color: good
+      channel: '{{ project_slack_channel }}'
+      msg: |
+        {{ project_instance }}: Checks are happy with {{ project_dns }}
+        {{ lookup("env", "CI_JOB_URL") }}
+
+  rescue:
+  - name: Send checks failed slack message
+    when: slack_token is defined and project_slack_channel
+    tags: update
+    slack:
+      token: '{{ project_slack_token }}'
+      username: Playlabs
+      icon_url: '{{ project_slack_icon }}'
+      color: danger
+      channel: '{{ project_slack_channel }}'
+      parse: full
+      msg: |
+        {{ project_instance }}: Checks say {{ project_dns }} is not behaving
+        Click the following for all relevant logs {{ lookup("env", "CI_JOB_URL") }}
+
+  always:
+  - name: nginx-letsencrypt application logs relevant to DNS
+    shell: /usr/bin/docker logs --since=2m nginx-letsencrypt 2>&1 | grep {{ project_dns }} | tail -n 10
+    tags: check,update
+    changed_when: false
+    failed_when: false
+    when: project_letsencrypt_email|default(false)
+
+  - name: nginx-proxy application logs relevant to current deploy
+    shell: /usr/bin/docker logs --since=2m nginx-proxy 2>&1 | grep -C1 "{{ test_id }}"
+    tags: check,update
+    failed_when: false
+    changed_when: false
+
+  - name: project application logs
+    shell: /usr/bin/docker logs --since=2m {{ project_instance }}
+    tags: check,update
+    failed_when: false
+    changed_when: false
