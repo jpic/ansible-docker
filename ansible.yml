@@ -1,4 +1,4 @@
----
+
 
 - name: Send deployment start slack message
   when: slack_token is defined and project_slack_channel
